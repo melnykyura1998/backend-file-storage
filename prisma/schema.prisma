@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ResourceType {
+  FILE
+  FOLDER
+}
+
+enum PermissionRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  folders      Folder[]     @relation("FolderOwner")
+  files        FileEntry[]  @relation("FileOwner")
+  permissions  Permission[]
+  orderPrefs   OrderPreference[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Folder {
+  id         String      @id @default(cuid())
+  name       String
+  parentId   String?
+  parent     Folder?     @relation("FolderChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Folder[]    @relation("FolderChildren")
+  ownerId    String
+  owner      User        @relation("FolderOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  files      FileEntry[]
+  position   Int         @default(0)
+  isPublic   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([ownerId])
+  @@index([parentId, position])
+}
+
+model FileEntry {
+  id         String    @id @default(cuid())
+  folderId   String?
+  folder     Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  ownerId    String
+  owner      User      @relation("FileOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  name       String
+  mimeType   String
+  size       Int
+  storageKey String?
+  data       Bytes?
+  position   Int       @default(0)
+  isPublic   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([ownerId])
+  @@index([folderId, position])
+}
+
+model Permission {
+  id           String         @id @default(cuid())
+  resourceType ResourceType
+  resourceId   String
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         PermissionRole
+  createdAt    DateTime       @default(now())
+
+  @@index([resourceType, resourceId])
+  @@unique([resourceType, resourceId, userId])
+}
+
+model OrderPreference {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceType ResourceType
+  resourceId   String
+  parentId     String?
+  position     Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([userId, resourceType, parentId])
+  @@unique([userId, resourceType, resourceId, parentId])
+}
