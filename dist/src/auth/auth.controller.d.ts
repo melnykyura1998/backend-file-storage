@@ -28,9 +28,9 @@ export declare class AuthController {
     }>;
     me(user: AuthenticatedUser): Promise<{
         isDemo: boolean;
-        id?: string | undefined;
         email?: string | undefined;
         name?: string | undefined;
+        id?: string | undefined;
     }>;
     private createAuthResponse;
 }
