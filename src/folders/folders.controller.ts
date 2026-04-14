@@ -32,6 +32,7 @@ import {
 } from '../common/order-preferences';
 import { canEditResource, canViewResource } from '../common/permissions';
 import { moveItem } from '../common/reorder';
+import { ShareAccessDto } from '../common/share.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFolderDto, MoveFolderDto, UpdateFolderDto } from './folders.dto';
 
@@ -451,6 +452,54 @@ export class FoldersController {
     return { success: true };
   }
 
+  @Post(':id/share')
+  @ApiOperation({ summary: 'Grant folder access to a user by email' })
+  async shareFolder(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: ShareAccessDto,
+  ) {
+    const user = await ensureActor(this.prisma, actor);
+    const permissions = await this.prisma.permission.findMany({
+      where: { userId: user.id },
+    });
+    const folder = await this.getFolderOrThrow(id);
+    this.assertFolderEdit(folder, permissions, user.id);
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { email: body.email.trim().toLowerCase() },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('User with this email was not found.');
+    }
+
+    await this.prisma.permission.upsert({
+      where: {
+        resourceType_resourceId_userId: {
+          resourceType: ResourceType.FOLDER,
+          resourceId: folder.id,
+          userId: targetUser.id,
+        },
+      },
+      update: {
+        role: body.role,
+      },
+      create: {
+        resourceType: ResourceType.FOLDER,
+        resourceId: folder.id,
+        userId: targetUser.id,
+        role: body.role,
+      },
+    });
+
+    return {
+      success: true,
+      email: targetUser.email,
+      role: body.role,
+    };
+  }
+
   private async cloneFolderRecursive(
     sourceFolderId: string,
     targetParentId: string | null,
@@ -699,5 +748,5 @@ function requireFileData(file: FileEntry): Uint8Array<ArrayBuffer> {
 
   const copy = new Uint8Array(file.data.byteLength);
   copy.set(file.data);
-  return copy as Uint8Array<ArrayBuffer>;
+  return copy;
 }

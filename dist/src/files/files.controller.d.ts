@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from '../auth/types';
+import { ShareAccessDto } from '../common/share.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MoveFileDto, UpdateFileDto, UploadFileDto } from './files.dto';
 export declare class FilesController {
@@ -48,6 +49,11 @@ export declare class FilesController {
     }>;
     moveFile(actor: AuthenticatedUser, id: string, body: MoveFileDto): Promise<{
         success: boolean;
+    }>;
+    shareFile(actor: AuthenticatedUser, id: string, body: ShareAccessDto): Promise<{
+        success: boolean;
+        email: string;
+        role: "EDITOR" | "VIEWER";
     }>;
     private getFileOrThrow;
     private getFolderOrThrow;

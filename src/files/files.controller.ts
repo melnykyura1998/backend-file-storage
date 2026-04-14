@@ -38,6 +38,7 @@ import {
   createUploadErrorMessage,
   isAllowedImageMimeType,
 } from '../common/upload';
+import { ShareAccessDto } from '../common/share.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MoveFileDto, UpdateFileDto, UploadFileDto } from './files.dto';
 
@@ -313,6 +314,54 @@ export class FilesController {
     return { success: true };
   }
 
+  @Post(':id/share')
+  @ApiOperation({ summary: 'Grant file access to a user by email' })
+  async shareFile(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: ShareAccessDto,
+  ) {
+    const user = await ensureActor(this.prisma, actor);
+    const permissions = await this.prisma.permission.findMany({
+      where: { userId: user.id },
+    });
+    const file = await this.getFileOrThrow(id);
+    this.assertFileEdit(file, permissions, user.id);
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { email: body.email.trim().toLowerCase() },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('User with this email was not found.');
+    }
+
+    await this.prisma.permission.upsert({
+      where: {
+        resourceType_resourceId_userId: {
+          resourceType: ResourceType.FILE,
+          resourceId: file.id,
+          userId: targetUser.id,
+        },
+      },
+      update: {
+        role: body.role,
+      },
+      create: {
+        resourceType: ResourceType.FILE,
+        resourceId: file.id,
+        userId: targetUser.id,
+        role: body.role,
+      },
+    });
+
+    return {
+      success: true,
+      email: targetUser.email,
+      role: body.role,
+    };
+  }
+
   private async getFileOrThrow(id: string): Promise<FileEntry> {
     const file = await this.prisma.fileEntry.findUnique({
       where: { id },
@@ -417,5 +466,5 @@ function requireFileData(file: FileEntry): Uint8Array<ArrayBuffer> {
 
   const copy = new Uint8Array(file.data.byteLength);
   copy.set(file.data);
-  return copy as Uint8Array<ArrayBuffer>;
+  return copy;
 }

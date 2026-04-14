@@ -21,6 +21,7 @@ const actor_1 = require("../common/actor");
 const order_preferences_1 = require("../common/order-preferences");
 const permissions_1 = require("../common/permissions");
 const reorder_1 = require("../common/reorder");
+const share_dto_1 = require("../common/share.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const folders_dto_1 = require("./folders.dto");
 let FoldersController = class FoldersController {
@@ -253,6 +254,43 @@ let FoldersController = class FoldersController {
         await (0, order_preferences_1.persistOrderPreferences)(this.prisma, user.id, client_1.ResourceType.FOLDER, folder.parentId, reordered);
         return { success: true };
     }
+    async shareFolder(actor, id, body) {
+        const user = await (0, actor_1.ensureActor)(this.prisma, actor);
+        const permissions = await this.prisma.permission.findMany({
+            where: { userId: user.id },
+        });
+        const folder = await this.getFolderOrThrow(id);
+        this.assertFolderEdit(folder, permissions, user.id);
+        const targetUser = await this.prisma.user.findUnique({
+            where: { email: body.email.trim().toLowerCase() },
+        });
+        if (!targetUser) {
+            throw new common_1.NotFoundException('User with this email was not found.');
+        }
+        await this.prisma.permission.upsert({
+            where: {
+                resourceType_resourceId_userId: {
+                    resourceType: client_1.ResourceType.FOLDER,
+                    resourceId: folder.id,
+                    userId: targetUser.id,
+                },
+            },
+            update: {
+                role: body.role,
+            },
+            create: {
+                resourceType: client_1.ResourceType.FOLDER,
+                resourceId: folder.id,
+                userId: targetUser.id,
+                role: body.role,
+            },
+        });
+        return {
+            success: true,
+            email: targetUser.email,
+            role: body.role,
+        };
+    }
     async cloneFolderRecursive(sourceFolderId, targetParentId, actorId, renameRoot) {
         const sourceFolder = await this.getFolderOrThrow(sourceFolderId);
         const position = await this.prisma.folder.count({
@@ -431,6 +469,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, folders_dto_1.MoveFolderDto]),
     __metadata("design:returntype", Promise)
 ], FoldersController.prototype, "moveFolder", null);
+__decorate([
+    (0, common_1.Post)(':id/share'),
+    (0, swagger_1.ApiOperation)({ summary: 'Grant folder access to a user by email' }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, share_dto_1.ShareAccessDto]),
+    __metadata("design:returntype", Promise)
+], FoldersController.prototype, "shareFolder", null);
 exports.FoldersController = FoldersController = __decorate([
     (0, swagger_1.ApiTags)('folders'),
     (0, swagger_1.ApiBearerAuth)(),

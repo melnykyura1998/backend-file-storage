@@ -24,6 +24,7 @@ const order_preferences_1 = require("../common/order-preferences");
 const permissions_1 = require("../common/permissions");
 const reorder_1 = require("../common/reorder");
 const upload_1 = require("../common/upload");
+const share_dto_1 = require("../common/share.dto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const files_dto_1 = require("./files.dto");
 let FilesController = class FilesController {
@@ -174,6 +175,43 @@ let FilesController = class FilesController {
         await (0, order_preferences_1.persistOrderPreferences)(this.prisma, user.id, client_1.ResourceType.FILE, file.folderId, reordered);
         return { success: true };
     }
+    async shareFile(actor, id, body) {
+        const user = await (0, actor_1.ensureActor)(this.prisma, actor);
+        const permissions = await this.prisma.permission.findMany({
+            where: { userId: user.id },
+        });
+        const file = await this.getFileOrThrow(id);
+        this.assertFileEdit(file, permissions, user.id);
+        const targetUser = await this.prisma.user.findUnique({
+            where: { email: body.email.trim().toLowerCase() },
+        });
+        if (!targetUser) {
+            throw new common_1.NotFoundException('User with this email was not found.');
+        }
+        await this.prisma.permission.upsert({
+            where: {
+                resourceType_resourceId_userId: {
+                    resourceType: client_1.ResourceType.FILE,
+                    resourceId: file.id,
+                    userId: targetUser.id,
+                },
+            },
+            update: {
+                role: body.role,
+            },
+            create: {
+                resourceType: client_1.ResourceType.FILE,
+                resourceId: file.id,
+                userId: targetUser.id,
+                role: body.role,
+            },
+        });
+        return {
+            success: true,
+            email: targetUser.email,
+            role: body.role,
+        };
+    }
     async getFileOrThrow(id) {
         const file = await this.prisma.fileEntry.findUnique({
             where: { id },
@@ -298,6 +336,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, files_dto_1.MoveFileDto]),
     __metadata("design:returntype", Promise)
 ], FilesController.prototype, "moveFile", null);
+__decorate([
+    (0, common_1.Post)(':id/share'),
+    (0, swagger_1.ApiOperation)({ summary: 'Grant file access to a user by email' }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, share_dto_1.ShareAccessDto]),
+    __metadata("design:returntype", Promise)
+], FilesController.prototype, "shareFile", null);
 exports.FilesController = FilesController = __decorate([
     (0, swagger_1.ApiTags)('files'),
     (0, swagger_1.ApiBearerAuth)(),

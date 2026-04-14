@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from '../auth/types';
+import { ShareAccessDto } from '../common/share.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFolderDto, MoveFolderDto, UpdateFolderDto } from './folders.dto';
 interface TreeNode {
@@ -96,6 +97,11 @@ export declare class FoldersController {
     }>;
     moveFolder(actor: AuthenticatedUser, id: string, body: MoveFolderDto): Promise<{
         success: boolean;
+    }>;
+    shareFolder(actor: AuthenticatedUser, id: string, body: ShareAccessDto): Promise<{
+        success: boolean;
+        email: string;
+        role: "EDITOR" | "VIEWER";
     }>;
     private cloneFolderRecursive;
     private getFolderOrThrow;
