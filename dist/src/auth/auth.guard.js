@@ -32,14 +32,6 @@ let ApiAuthGuard = class ApiAuthGuard {
             throw new common_1.UnauthorizedException('Bearer token is required.');
         }
         const token = authorizationHeader.replace('Bearer ', '').trim();
-        if (token === this.getDemoToken()) {
-            request.user = {
-                userId: 'demo-user',
-                email: 'demo@example.com',
-                isDemo: true,
-            };
-            return true;
-        }
         try {
             const payload = await this.jwtService.verifyAsync(token, {
                 secret: this.getJwtSecret(),
@@ -47,16 +39,12 @@ let ApiAuthGuard = class ApiAuthGuard {
             request.user = {
                 userId: payload.sub,
                 email: payload.email,
-                isDemo: false,
             };
             return true;
         }
         catch {
             throw new common_1.UnauthorizedException('Token is invalid or expired.');
         }
-    }
-    getDemoToken() {
-        return process.env.DEMO_BEARER_TOKEN ?? 'demo-drive-token';
     }
     getJwtSecret() {
         return process.env.JWT_SECRET ?? 'super-secret-demo-key';

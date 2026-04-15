@@ -7,12 +7,17 @@ import sinon from 'sinon';
 import { ApiAuthGuard } from '../src/auth/auth.guard';
 
 describe('ApiAuthGuard', () => {
-  it('accepts the hardcoded demo bearer token', async () => {
+  it('accepts a valid JWT bearer token', async () => {
     const reflector = new Reflector();
-    const jwtService = { verifyAsync: sinon.stub() } as unknown as JwtService;
+    const jwtService = {
+      verifyAsync: sinon.stub().resolves({
+        sub: 'user-1',
+        email: 'user@example.com',
+      }),
+    } as unknown as JwtService;
     const guard = new ApiAuthGuard(reflector, jwtService);
     const request = {
-      headers: { authorization: 'Bearer demo-drive-token' },
+      headers: { authorization: 'Bearer valid-jwt' },
     };
 
     const canActivate = await guard.canActivate(
@@ -21,9 +26,8 @@ describe('ApiAuthGuard', () => {
 
     assert.equal(canActivate, true);
     assert.deepEqual(request.user, {
-      userId: 'demo-user',
-      email: 'demo@example.com',
-      isDemo: true,
+      userId: 'user-1',
+      email: 'user@example.com',
     });
   });
 

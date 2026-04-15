@@ -38,16 +38,6 @@ export class ApiAuthGuard implements CanActivate {
 
     const token = authorizationHeader.replace('Bearer ', '').trim();
 
-    if (token === this.getDemoToken()) {
-      request.user = {
-        userId: 'demo-user',
-        email: 'demo@example.com',
-        isDemo: true,
-      };
-
-      return true;
-    }
-
     try {
       const payload = await this.jwtService.verifyAsync<{
         sub: string;
@@ -59,17 +49,12 @@ export class ApiAuthGuard implements CanActivate {
       request.user = {
         userId: payload.sub,
         email: payload.email,
-        isDemo: false,
       };
 
       return true;
     } catch {
       throw new UnauthorizedException('Token is invalid or expired.');
     }
-  }
-
-  private getDemoToken(): string {
-    return process.env.DEMO_BEARER_TOKEN ?? 'demo-drive-token';
   }
 
   private getJwtSecret(): string {

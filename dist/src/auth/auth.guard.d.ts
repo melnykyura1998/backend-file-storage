@@ -6,6 +6,5 @@ export declare class ApiAuthGuard implements CanActivate {
     private readonly jwtService;
     constructor(reflector: Reflector, jwtService: JwtService);
     canActivate(context: ExecutionContext): Promise<boolean>;
-    private getDemoToken;
     private getJwtSecret;
 }

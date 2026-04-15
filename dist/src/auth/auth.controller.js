@@ -59,14 +59,6 @@ let AuthController = class AuthController {
         return this.createAuthResponse(user.id, user.email, user.name);
     }
     async me(user) {
-        if (user.isDemo) {
-            return {
-                id: 'demo-user',
-                email: 'demo@example.com',
-                name: 'Demo User',
-                isDemo: true,
-            };
-        }
         const storedUser = await this.prisma.user.findUnique({
             where: { id: user.userId },
             select: {
@@ -75,10 +67,7 @@ let AuthController = class AuthController {
                 name: true,
             },
         });
-        return {
-            ...storedUser,
-            isDemo: false,
-        };
+        return storedUser;
     }
     async createAuthResponse(userId, email, name) {
         const token = await this.jwtService.signAsync({
@@ -90,12 +79,10 @@ let AuthController = class AuthController {
         });
         return {
             token,
-            demoToken: process.env.DEMO_BEARER_TOKEN ?? 'demo-drive-token',
             user: {
                 id: userId,
                 email,
                 name,
-                isDemo: false,
             },
         };
     }

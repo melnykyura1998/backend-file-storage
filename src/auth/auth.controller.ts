@@ -76,15 +76,6 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOkResponse({ description: 'Returns the authenticated user.' })
   async me(@CurrentUser() user: AuthenticatedUser) {
-    if (user.isDemo) {
-      return {
-        id: 'demo-user',
-        email: 'demo@example.com',
-        name: 'Demo User',
-        isDemo: true,
-      };
-    }
-
     const storedUser = await this.prisma.user.findUnique({
       where: { id: user.userId },
       select: {
@@ -94,10 +85,7 @@ export class AuthController {
       },
     });
 
-    return {
-      ...storedUser,
-      isDemo: false,
-    };
+    return storedUser;
   }
 
   private async createAuthResponse(
@@ -118,12 +106,10 @@ export class AuthController {
 
     return {
       token,
-      demoToken: process.env.DEMO_BEARER_TOKEN ?? 'demo-drive-token',
       user: {
         id: userId,
         email,
         name,
-        isDemo: false,
       },
     };
   }

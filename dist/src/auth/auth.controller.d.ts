@@ -8,29 +8,24 @@ export declare class AuthController {
     constructor(prisma: PrismaService, jwtService: JwtService);
     register(body: RegisterDto): Promise<{
         token: string;
-        demoToken: string;
         user: {
             id: string;
             email: string;
             name: string;
-            isDemo: boolean;
         };
     }>;
     login(body: LoginDto): Promise<{
         token: string;
-        demoToken: string;
         user: {
             id: string;
             email: string;
             name: string;
-            isDemo: boolean;
         };
     }>;
     me(user: AuthenticatedUser): Promise<{
-        isDemo: boolean;
-        email?: string | undefined;
-        name?: string | undefined;
-        id?: string | undefined;
-    }>;
+        email: string;
+        name: string;
+        id: string;
+    } | null>;
     private createAuthResponse;
 }
