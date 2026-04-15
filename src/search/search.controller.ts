@@ -5,11 +5,10 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { ResourceType } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/types';
 import { ensureActor } from '../common/actor';
-import { canViewResource } from '../common/permissions';
+import { buildVisibilityContext } from '../common/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('search')
@@ -38,7 +37,7 @@ export class SearchController {
       };
     }
 
-    const [folders, files] = await Promise.all([
+    const [folders, files, allFolders, allFiles] = await Promise.all([
       this.prisma.folder.findMany({
         where: {
           name: {
@@ -57,20 +56,34 @@ export class SearchController {
         },
         orderBy: { updatedAt: 'desc' },
       }),
+      this.prisma.folder.findMany({
+        select: {
+          id: true,
+          parentId: true,
+          ownerId: true,
+          isPublic: true,
+        },
+      }),
+      this.prisma.fileEntry.findMany({
+        select: {
+          id: true,
+          folderId: true,
+          ownerId: true,
+          isPublic: true,
+        },
+      }),
     ]);
+
+    const visibility = buildVisibilityContext(
+      permissions,
+      allFolders,
+      allFiles,
+      user.id,
+    );
 
     return {
       folders: folders
-        .filter((folder) =>
-          canViewResource(
-            permissions,
-            ResourceType.FOLDER,
-            folder.id,
-            user.id,
-            folder.ownerId,
-            folder.isPublic,
-          ),
-        )
+        .filter((folder) => visibility.canViewFolder(folder.id))
         .map((folder) => ({
           id: folder.id,
           name: folder.name,
@@ -80,16 +93,7 @@ export class SearchController {
           updatedAt: folder.updatedAt,
         })),
       files: files
-        .filter((file) =>
-          canViewResource(
-            permissions,
-            ResourceType.FILE,
-            file.id,
-            user.id,
-            file.ownerId,
-            file.isPublic,
-          ),
-        )
+        .filter((file) => visibility.canViewFile(file))
         .map((file) => ({
           id: file.id,
           name: file.name,

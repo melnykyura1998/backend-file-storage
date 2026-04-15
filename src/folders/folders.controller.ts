@@ -30,7 +30,11 @@ import {
   applyGroupedOrderPreferences,
   persistOrderPreferences,
 } from '../common/order-preferences';
-import { canEditResource, canViewResource } from '../common/permissions';
+import {
+  buildVisibilityContext,
+  canEditResource,
+  canViewResource,
+} from '../common/permissions';
 import { moveItem } from '../common/reorder';
 import { ShareAccessDto } from '../common/share.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -89,27 +93,18 @@ export class FoldersController {
       }),
     ]);
 
-    const visibleFolders = folders.filter((folder) =>
-      canViewResource(
-        permissions,
-        ResourceType.FOLDER,
-        folder.id,
-        user.id,
-        folder.ownerId,
-        folder.isPublic,
-      ),
+    const visibility = buildVisibilityContext(
+      permissions,
+      folders,
+      files,
+      user.id,
     );
 
-    const visibleFiles = files.filter((file) =>
-      canViewResource(
-        permissions,
-        ResourceType.FILE,
-        file.id,
-        user.id,
-        file.ownerId,
-        file.isPublic,
-      ),
+    const visibleFolders = folders.filter((folder) =>
+      visibility.canViewFolder(folder.id),
     );
+
+    const visibleFiles = files.filter((file) => visibility.canViewFile(file));
 
     const orderedFolders = applyGroupedOrderPreferences(
       visibleFolders,
@@ -137,20 +132,7 @@ export class FoldersController {
       where: { userId: user.id },
     });
 
-    let currentFolder: Folder | null = null;
-    if (parentId) {
-      currentFolder = await this.prisma.folder.findUnique({
-        where: { id: parentId },
-      });
-
-      if (!currentFolder) {
-        throw new NotFoundException('Folder not found.');
-      }
-
-      this.assertFolderView(currentFolder, permissions, user.id);
-    }
-
-    const [folders, files, allFolders, orderPreferences] = await Promise.all([
+    const [folders, files, allFolders, allFiles, orderPreferences] = await Promise.all([
       this.prisma.folder.findMany({
         where: { parentId: parentId ?? null },
         orderBy: { position: 'asc' },
@@ -160,6 +142,14 @@ export class FoldersController {
         orderBy: { position: 'asc' },
       }),
       this.prisma.folder.findMany(),
+      this.prisma.fileEntry.findMany({
+        select: {
+          id: true,
+          folderId: true,
+          ownerId: true,
+          isPublic: true,
+        },
+      }),
       this.prisma.orderPreference.findMany({
         where: {
           userId: user.id,
@@ -168,26 +158,31 @@ export class FoldersController {
       }),
     ]);
 
-    const visibleFolders = folders.filter((folder) => {
-      return canViewResource(
-        permissions,
-        ResourceType.FOLDER,
-        folder.id,
-        user.id,
-        folder.ownerId,
-        folder.isPublic,
-      );
-    });
-    const visibleFiles = files.filter((file) => {
-      return canViewResource(
-        permissions,
-        ResourceType.FILE,
-        file.id,
-        user.id,
-        file.ownerId,
-        file.isPublic,
-      );
-    });
+    const visibility = buildVisibilityContext(
+      permissions,
+      allFolders,
+      allFiles,
+      user.id,
+    );
+
+    let currentFolder: Folder | null = null;
+    if (parentId) {
+      currentFolder =
+        allFolders.find((folder) => folder.id === parentId) ?? null;
+
+      if (!currentFolder) {
+        throw new NotFoundException('Folder not found.');
+      }
+
+      if (!visibility.canViewFolder(currentFolder.id)) {
+        throw new ForbiddenException('You do not have access to this folder.');
+      }
+    }
+
+    const visibleFolders = folders.filter((folder) =>
+      visibility.canViewFolder(folder.id),
+    );
+    const visibleFiles = files.filter((file) => visibility.canViewFile(file));
 
     const orderedFolders = applyGroupedOrderPreferences(
       visibleFolders,

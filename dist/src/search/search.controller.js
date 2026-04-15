@@ -15,7 +15,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SearchController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
-const client_1 = require("@prisma/client");
 const current_user_decorator_1 = require("../auth/current-user.decorator");
 const actor_1 = require("../common/actor");
 const permissions_1 = require("../common/permissions");
@@ -37,7 +36,7 @@ let SearchController = class SearchController {
                 files: [],
             };
         }
-        const [folders, files] = await Promise.all([
+        const [folders, files, allFolders, allFiles] = await Promise.all([
             this.prisma.folder.findMany({
                 where: {
                     name: {
@@ -56,10 +55,27 @@ let SearchController = class SearchController {
                 },
                 orderBy: { updatedAt: 'desc' },
             }),
+            this.prisma.folder.findMany({
+                select: {
+                    id: true,
+                    parentId: true,
+                    ownerId: true,
+                    isPublic: true,
+                },
+            }),
+            this.prisma.fileEntry.findMany({
+                select: {
+                    id: true,
+                    folderId: true,
+                    ownerId: true,
+                    isPublic: true,
+                },
+            }),
         ]);
+        const visibility = (0, permissions_1.buildVisibilityContext)(permissions, allFolders, allFiles, user.id);
         return {
             folders: folders
-                .filter((folder) => (0, permissions_1.canViewResource)(permissions, client_1.ResourceType.FOLDER, folder.id, user.id, folder.ownerId, folder.isPublic))
+                .filter((folder) => visibility.canViewFolder(folder.id))
                 .map((folder) => ({
                 id: folder.id,
                 name: folder.name,
@@ -69,7 +85,7 @@ let SearchController = class SearchController {
                 updatedAt: folder.updatedAt,
             })),
             files: files
-                .filter((file) => (0, permissions_1.canViewResource)(permissions, client_1.ResourceType.FILE, file.id, user.id, file.ownerId, file.isPublic))
+                .filter((file) => visibility.canViewFile(file))
                 .map((file) => ({
                 id: file.id,
                 name: file.name,

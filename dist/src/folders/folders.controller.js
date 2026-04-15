@@ -53,8 +53,9 @@ let FoldersController = class FoldersController {
                 },
             }),
         ]);
-        const visibleFolders = folders.filter((folder) => (0, permissions_1.canViewResource)(permissions, client_1.ResourceType.FOLDER, folder.id, user.id, folder.ownerId, folder.isPublic));
-        const visibleFiles = files.filter((file) => (0, permissions_1.canViewResource)(permissions, client_1.ResourceType.FILE, file.id, user.id, file.ownerId, file.isPublic));
+        const visibility = (0, permissions_1.buildVisibilityContext)(permissions, folders, files, user.id);
+        const visibleFolders = folders.filter((folder) => visibility.canViewFolder(folder.id));
+        const visibleFiles = files.filter((file) => visibility.canViewFile(file));
         const orderedFolders = (0, order_preferences_1.applyGroupedOrderPreferences)(visibleFolders, orderPreferences, client_1.ResourceType.FOLDER, (folder) => folder.parentId);
         return {
             folders: buildFolderTree(orderedFolders, visibleFiles),
@@ -65,17 +66,7 @@ let FoldersController = class FoldersController {
         const permissions = await this.prisma.permission.findMany({
             where: { userId: user.id },
         });
-        let currentFolder = null;
-        if (parentId) {
-            currentFolder = await this.prisma.folder.findUnique({
-                where: { id: parentId },
-            });
-            if (!currentFolder) {
-                throw new common_1.NotFoundException('Folder not found.');
-            }
-            this.assertFolderView(currentFolder, permissions, user.id);
-        }
-        const [folders, files, allFolders, orderPreferences] = await Promise.all([
+        const [folders, files, allFolders, allFiles, orderPreferences] = await Promise.all([
             this.prisma.folder.findMany({
                 where: { parentId: parentId ?? null },
                 orderBy: { position: 'asc' },
@@ -85,6 +76,14 @@ let FoldersController = class FoldersController {
                 orderBy: { position: 'asc' },
             }),
             this.prisma.folder.findMany(),
+            this.prisma.fileEntry.findMany({
+                select: {
+                    id: true,
+                    folderId: true,
+                    ownerId: true,
+                    isPublic: true,
+                },
+            }),
             this.prisma.orderPreference.findMany({
                 where: {
                     userId: user.id,
@@ -92,12 +91,20 @@ let FoldersController = class FoldersController {
                 },
             }),
         ]);
-        const visibleFolders = folders.filter((folder) => {
-            return (0, permissions_1.canViewResource)(permissions, client_1.ResourceType.FOLDER, folder.id, user.id, folder.ownerId, folder.isPublic);
-        });
-        const visibleFiles = files.filter((file) => {
-            return (0, permissions_1.canViewResource)(permissions, client_1.ResourceType.FILE, file.id, user.id, file.ownerId, file.isPublic);
-        });
+        const visibility = (0, permissions_1.buildVisibilityContext)(permissions, allFolders, allFiles, user.id);
+        let currentFolder = null;
+        if (parentId) {
+            currentFolder =
+                allFolders.find((folder) => folder.id === parentId) ?? null;
+            if (!currentFolder) {
+                throw new common_1.NotFoundException('Folder not found.');
+            }
+            if (!visibility.canViewFolder(currentFolder.id)) {
+                throw new common_1.ForbiddenException('You do not have access to this folder.');
+            }
+        }
+        const visibleFolders = folders.filter((folder) => visibility.canViewFolder(folder.id));
+        const visibleFiles = files.filter((file) => visibility.canViewFile(file));
         const orderedFolders = (0, order_preferences_1.applyGroupedOrderPreferences)(visibleFolders, orderPreferences, client_1.ResourceType.FOLDER, (folder) => folder.parentId);
         const orderedFiles = (0, order_preferences_1.applyGroupedOrderPreferences)(visibleFiles, orderPreferences, client_1.ResourceType.FILE, (file) => file.folderId);
         return {
